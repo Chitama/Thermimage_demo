@@ -29,6 +29,7 @@ class FlirImageExtractor:
         self.temp_val = 25
         self.flir_img_filename = ""
         self.thermal_filename = ""
+        self.csv_filename = ""
         self.image_suffix = "_rgb_image.jpg"
         self.thumbnail_suffix = "_rgb_thumb.jpg"
         self.thermal_suffix = "_thermal.png"
@@ -43,7 +44,7 @@ class FlirImageExtractor:
 
     pass
 
-    def process_image(self, flir_img_filename, temp_val):
+    def process_image(self, flir_img_filename, csv_filename, temp_val):
         """
         Given a valid image path, process the file: extract real thermal values
         and a thumbnail for comparison (generally thumbnail is on the visible spectre)
@@ -57,6 +58,7 @@ class FlirImageExtractor:
             raise ValueError("Input file does not exist or this user don't have permission on this file")
 
         self.flir_img_filename = flir_img_filename
+        self.csv_filename = csv_filename        
         self.temp_val = temp_val
 
         if self.get_image_type().upper().strip() == "TIFF":
@@ -98,6 +100,13 @@ class FlirImageExtractor:
         :return:
         """
         return self.thermal_filename
+
+    def get_csv_filename(self):
+        """
+        Return csv_filename
+        :return:
+        """
+        return self.csv_filename
 
     def get_rgb_np(self):
         """
@@ -240,7 +249,8 @@ class FlirImageExtractor:
         self.save_images()
         thermal_filename = self.get_thermal_filename()
         temp_val = self.get_temp_val()
-        
+        csv_filename = self.get_csv_filename()
+                
         # 元画像の表示 ----- 
         plt.subplot(2, 2, 1)
         # 画像の読み込み
@@ -283,6 +293,8 @@ class FlirImageExtractor:
             plt.imshow( tmp_img )
 
         plt.show()
+        
+        self.export_thermal_to_csv(csv_filename)
 
     def save_images(self):
         """
