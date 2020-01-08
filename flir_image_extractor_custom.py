@@ -12,6 +12,7 @@ import re
 import csv
 import subprocess
 import cv2  # OpenCVのインポート
+import pandas as pd 
 
 from PIL import Image
 from math import sqrt, exp, log
@@ -238,6 +239,17 @@ class FlirImageExtractor:
         digits = re.findall(r"[-+]?\d*\.\d+|\d+", dirtystr)
         return float(digits[0])
 
+
+    # def plot_over(self):
+    #     print('指定温度は' + str(self.get_temp_val()) + ' 度以上を表示')
+    #     self.plot(False)
+
+
+    # def plot_less(self):
+    #     print('指定温度は' + str(self.get_temp_val()) + ' 度以下を表示')
+    #     self.plot(True)
+
+    # def plot(self, is_less):
     def plot(self):
         """
         Plot the rgb + thermal image (easy to see the pixel values)
@@ -250,31 +262,20 @@ class FlirImageExtractor:
         thermal_filename = self.get_thermal_filename()
         temp_val = self.get_temp_val()
         csv_filename = self.get_csv_filename()
-                
+
         # 元画像の表示 ----- 
-        plt.subplot(2, 2, 1)
         # 画像の読み込み
         ori_img = np.array( Image.open(flir_img_filename) )
-        # 画像の表示
-        plt.imshow( ori_img )
-
 
         # 温度計算後の画像プロット ----- 
-        plt.subplot(2, 2, 2)
-        plt.imshow(thermal_np, cmap='hot')
+        # plt.imshow(thermal_np, cmap='hot')
 
-
-        # 指定温度のみのプロット ----- 
-        plt.subplot(2, 2, 3)
-        # print("INFO thermal_np:{}".format(thermal_np))
-        thermal_np_tmp = np.where((thermal_np >= temp_val),thermal_np,255)
-        plt.imshow(thermal_np_tmp, cmap='pink')
-
+        # 指定温度のみのプロット -----
+        thermal_np_tmp_over = np.where((thermal_np >= temp_val),thermal_np,255)
+        thermal_np_tmp_less = np.where((thermal_np <= temp_val),thermal_np,255)
 
         # 指定温度の色変えプロット ----- 
-        plt.subplot(2, 2, 4)
         img_cv = cv2.imread(thermal_filename)
-        
         flir_img_filename_3 = "/content/edit.jpg"
         if img_cv is not None:
             # 禁じ手のループ
@@ -289,12 +290,33 @@ class FlirImageExtractor:
             # 画像の読み込み
             tmp_img = np.array( Image.open(flir_img_filename_3) )
 
-            # 画像の表示
-            plt.imshow( tmp_img )
+        # タイトルと画像データをリスト化
+        bin_imgs = {'original': ori_img, 'target temperature change color': tmp_img, 'target temperature over': thermal_np_tmp_over, 'target temperature less': thermal_np_tmp_less}
+
+        #figure()でグラフを表示する領域をつくり，figオブジェクトにする．
+        fig, axes_list = plt.subplots(2, 2, figsize=(3,3), dpi=250)
+
+        color_conunt_text = ""
+        for ax, (label, bin_img) in zip(axes_list.ravel(), bin_imgs.items()):
+            self.set_style_plt(ax, label)
+            ax.set_title(label,loc='left',fontsize='6')
+            ax.imshow(bin_img, cmap=plt.cm.gray)
 
         plt.show()
         
         self.export_thermal_to_csv(csv_filename)
+
+    def set_style_plt(self, ax, label):
+        ax.set_title(label,loc='left',fontsize='4')
+        ax.tick_params(labelbottom=False,
+                    labelleft=False,
+                    labelright=False,
+                    labeltop=False)
+        ax.tick_params(bottom=False,
+                    left=False,
+                    right=False,
+                    top=False)
+
 
     def save_images(self):
         """
@@ -341,6 +363,68 @@ class FlirImageExtractor:
             writer.writerows(pixel_values)
 
 
+    def check_thermal_at_csv(self, terget_rang, csv_filename, temp_val_more_than, temp_val_range_more, temp_val_range_less, temp_val_less_than):
+        # 画像の温度情報を確認
+        data= pd.read_csv(csv_filename)
+        total_count = len(data["temp (c)"].dropna(how='any'))
+        temp_more = len(data[data["temp (c)"] >= temp_val_more_than].dropna(how='any'))/total_count*100
+        temp_less = len(data[data["temp (c)"] <= temp_val_less_than].dropna(how='any'))/total_count*100
+        temp_range = len(data[(data["temp (c)"] >= temp_val_range_more) & (data["temp (c)"] <= temp_val_range_less)].dropna(how='any'))/total_count*100
+
+        print("------ ------ ------ ------")
+        print("指定温度 [ " + str(temp_val_more_than) + " ℃ ] 以上の割合： "  +  str(round(temp_more, 2)) + " %")
+        print("指定温度 [ " + str(temp_val_range_more) + " ℃ ] 以上 [ " + str(temp_val_range_less) + " ℃ ] 以下の割合： "  +  str(round(temp_range, 2)) + " %")
+        print("指定温度 [ " + str(temp_val_less_than) + " ℃ ] 以下の割合： "  +  str(round(temp_less, 2)) + " %")
+        print("------ ------ ------ ------")
+        print("最大温度： " +  str(round(data["temp (c)"].max(), 2)) + " ℃")
+        print("最小温度： " +  str(round(data["temp (c)"].min(), 2)) + " ℃")
+        print("------ ------ ------ ------")
+
+        print("\n")
+        print("指定温度範囲の割合チェック")
+        if round(temp_more, 2) < terget_rang:
+            self.show_ok()
+        else:
+            self.show_ng()
+
+        print("\n")
+        print("指定温度範囲の割合チェック")
+        if round(temp_range, 2) < terget_rang:
+            self.show_ok()
+        else:
+            self.show_ng()
+
+        print("\n")
+        print("指定温度以下の割合チェック")
+        if round(temp_less, 2) < terget_rang:
+            self.show_ok()
+        else:
+            self.show_ng()
+
+    def show_ok(self):
+        self.show_image("/content/Thermimage_demo/img/m_ok.png")
+        print("問題ありません。")
+
+    def show_ng(self):
+        self.show_image("/content/Thermimage_demo/img/m_ng.png")
+        print("異常な数値が検出されました。")
+
+
+    def show_image(self, image_path):
+        # 画像の読み込み
+        im = Image.open(image_path)
+        # 画像をarrayに変換
+        im_list = np.asarray(im)
+        # サイズを調整
+        plt.figure(figsize=(2, 2))
+        # 罫線を非表示
+        plt.axis('off')
+        # 貼り付け
+        plt.imshow(im_list)
+        # 表示
+        plt.show()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Extract and visualize Flir Image data')
     parser.add_argument('-i', '--input', type=str, help='Input image. Ex. img.jpg', required=True)
@@ -351,10 +435,14 @@ if __name__ == '__main__':
                         required=False)
     parser.add_argument('-d', '--debug', help='Set the debug flag', required=False,
                         action='store_true')
+    parser.add_argument('-tc', '--check_thermal_at_csv', help='Input image. Ex. img.jpg', required=False)
     args = parser.parse_args()
 
     fie = FlirImageExtractor(exiftool_path=args.exiftool, is_debug=args.debug)
     fie.process_image(args.input)
+
+    if args.check_thermal_at_csv:
+        fie.check_thermal_at_csv(args.input)
 
     if args.plot:
         fie.plot()
