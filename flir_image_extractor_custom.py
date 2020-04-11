@@ -12,7 +12,8 @@ import re
 import csv
 import subprocess
 import cv2  # OpenCVのインポート
-import pandas as pd 
+import pandas as pd
+import datetime
 
 from PIL import Image
 from math import sqrt, exp, log
@@ -21,6 +22,8 @@ from matplotlib import pyplot as plt
 
 import numpy as np
 
+import time
+import math
 
 class FlirImageExtractor:
 
@@ -59,7 +62,7 @@ class FlirImageExtractor:
             raise ValueError("Input file does not exist or this user don't have permission on this file")
 
         self.flir_img_filename = flir_img_filename
-        self.csv_filename = csv_filename        
+        self.csv_filename = csv_filename
         self.temp_val = temp_val
 
         if self.get_image_type().upper().strip() == "TIFF":
@@ -239,7 +242,6 @@ class FlirImageExtractor:
         digits = re.findall(r"[-+]?\d*\.\d+|\d+", dirtystr)
         return float(digits[0])
 
-
     # def plot_over(self):
     #     print('指定温度は' + str(self.get_temp_val()) + ' 度以上を表示')
     #     self.plot(False)
@@ -273,7 +275,7 @@ class FlirImageExtractor:
         # 指定温度のみのプロット -----
         thermal_np_tmp_over = np.where((thermal_np >= temp_val),thermal_np,255)
         thermal_np_tmp_less = np.where((thermal_np <= temp_val),thermal_np,255)
-
+        
         # 指定温度の色変えプロット ----- 
         img_cv = cv2.imread(thermal_filename)
         flir_img_filename_3 = "/content/edit.jpg"
@@ -304,7 +306,9 @@ class FlirImageExtractor:
 
         plt.show()
         
+        # CSV作成
         self.export_thermal_to_csv(csv_filename)
+
 
     def set_style_plt(self, ax, label):
         ax.set_title(label,loc='left',fontsize='4')
@@ -343,6 +347,7 @@ class FlirImageExtractor:
 
         img_visual.save(image_filename)
         img_thermal.save(thermal_filename)
+
 
     def export_thermal_to_csv(self, csv_filename):
         """
@@ -423,6 +428,23 @@ class FlirImageExtractor:
         plt.imshow(im_list)
         # 表示
         plt.show()
+
+
+    # -- -- -- --
+    # -- メイン --
+    # -- -- -- --
+    def excute_analysis(self, f_nm_ext):
+        f_nm,ext = os.path.splitext(os.path.basename(f_nm_ext))
+
+        NOW_TIME = datetime.datetime.now()+ datetime.timedelta(hours=9)
+        csv_file_name = f_nm + "_" + str(NOW_TIME.strftime("%Y%m%d%H%M%S")) +  ".csv"
+
+        # 数値計算
+        self.process_image(f_nm_ext, csv_file_name, 50)
+        # CSV作成
+        self.export_thermal_to_csv(csv_file_name)
+        # CSVのファイル名を返却
+        return csv_file_name
 
 
 if __name__ == '__main__':
